@@ -20,7 +20,8 @@ class WebProxy():
         return self._create_plugin()
 
     def get_from_big(self, proxyDomain):
-        PROXY_API = "https://bigboost.bigdatacorp.com.br/ProxiesAPI/api/BDCProxiesListServer?key=13FE584A-C637-43CB-AE1F-9E3E4B3F6F99&provider={0}&function=GetProxy&zone=srf"
+        #API DE PROXY, não posso liberar porque é paga
+        PROXY_API = ""
 
         req = requests.get(PROXY_API.format(proxyDomain))
         
