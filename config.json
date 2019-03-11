@@ -1,0 +1,29 @@
+{
+  "cpf": "168.073.467-94",
+  "min_date": "22/10/2018",
+  "max_date": "02/11/2018",
+  "student_type": {
+    "value": "3",
+    "values_description": {
+      "1": "BOLSISTA",
+      "2": "COTISTA",
+      "3": "RENDA PER CAPITA DE ATE 1 SALARIO MINIMO"
+    }
+  },
+  "schedule_type": {
+    "value": "6",
+    "values_description": {
+      "3": "RENOVAÇÃO/RECADASTRAMENTO DO BENEFÍCIO",
+      "4": "1ª VIA DO CARTÃO",
+      "6": "2ª VIA DO CARTÃO"
+    }
+  },
+  "excluded_places": ["BANGU"],
+  "bot_visible": false,
+  "bot_use_proxy": false,
+  "bot_params": {
+    "change_proxy_interval": 18000,
+    "check_interval": 5,
+    "selenium_timeout": 10
+  }
+}

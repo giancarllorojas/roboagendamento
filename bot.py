@@ -8,26 +8,31 @@ from proxy import WebProxy
 from time import sleep
 from random import choice
 from datetime import datetime
+import json
 import sys
-import sendgrid
+import requests
 
 SEL_WAIT_TIME         = 10
-CHECK_INTERVAL        = 15
+CHECK_INTERVAL        = 5
 CHANGE_PROXY_INTERVAL = 18000
 
 class RoboAgendamento:
-    def __init__(self, visibility, max_date, use_proxy, use_vdisplay):
-        self.user_agents    = open("uas.txt").readlines()
-        self.visibility     = visibility
-        self.max_date       = datetime.strptime(max_date, '%d/%m/%Y')
-        self.min_found_date = ""
-        self.use_proxy      = use_proxy
-        self.agendado       = False
-        self.use_vdisplay   = use_vdisplay
+    def __init__(self, config):
+        self.user_agents     = open("uas.txt").readlines()
+        self.visibility      = config['bot_visible']
+        self.max_date        = datetime.strptime(config['max_date'], '%d/%m/%Y')
+        self.min_date        = datetime.strptime(config['min_date'], '%d/%m/%Y')
+        self.schedule_type   = config['schedule_type']['value']
+        self.student_type    = config['student_type']['value']
+        self.min_found_date  = ""
+        self.use_proxy       = config['bot_use_proxy']
+        self.agendado        = False
+        self.use_vdisplay    = True
+        self.excluded_places = config['excluded_places']
+
+        print(self.max_date, self.min_date)
 
     def _mount_chrome(self, visibility):
-        
-
         chrome_options = webdriver.ChromeOptions()
         chrome_options.add_argument("--disable-bundled-ppapi-flash")
         chrome_options.add_argument("--enable-extensions")
@@ -37,11 +42,10 @@ class RoboAgendamento:
         chrome_options.add_argument("--allow-insecure-localhost")
         chrome_options.add_argument('--disable-gpu')
         chrome_options.add_argument("user-agent=" + choice(self.user_agents))
-        
+
         if(self.use_proxy):
             proxy = WebProxy()
             chrome_options.add_extension(proxy.get_plugin())
-        
 
         if(self.use_vdisplay):
             print(self._now() + ": " + "Starting display with visibility=" + str(self.visibility))
@@ -55,7 +59,7 @@ class RoboAgendamento:
     def _select_tipo(self, driver):
         print(self._now() + ": " + "Selecionando tipo")
         select = self._get_select('seltipoaluno')
-        select.select_by_value('3')
+        select.select_by_value(self.student_type)
 
         WebDriverWait(driver, SEL_WAIT_TIME).until(EC.alert_is_present())
         driver.switch_to_alert().accept()
@@ -79,7 +83,7 @@ class RoboAgendamento:
                 sleep(0.2)
             except:
                 break
-    
+
     def _get_select(self, ident):
         WebDriverWait(self.driver, SEL_WAIT_TIME).until(EC.presence_of_element_located((By.ID, ident)))
         return Select(self.driver.find_element_by_id(ident))
@@ -99,42 +103,14 @@ class RoboAgendamento:
 
         while "Aguarde" in day_input.text:
             day_input = self.driver.find_element_by_id('divDataAgenda')
-        
+
         return day_input.text
 
     def _email(self, title, text):
-        sg = sendgrid.SendGridAPIClient(apikey='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')
-        data = {
-        "personalizations": [
-            {
-            "to": [
-                {
-                "email": "defensedelesprit@gmail.com"
-                },
-                {
-                "email": "raqueldelimac@gmail.com"
-                }
-            ],
-            "subject": "RoboAgendamento LOG - " + str(title)
-            }
-        ],
-        "from": {
-            "email": "alerta@roboagendamento.com"
-        },
-        "content": [
-            {
-            "type": "text/plain",
-            "value": str(text)
-            }
-        ]
-        }
-        #print(data)
-        print(self._now() + ": " + "Enviando e-mail")
+        chatID = "-314311013"
+        token  = "696336641:AAE4PwtywoQEV3XqOYUFoxvYNl3e4DQ5pCQ"
 
-        trys = 0
-        
-        response = sg.client.mail.send.post(request_body=data)
-                
+        r = requests.post("https://api.telegram.org/bot" + token + "/sendMessage", {"chat_id": chatID, "text": text})
 
     def _agendar(self, day, hour):
         select_hours    = self._get_select('horaSelecionada')
@@ -160,14 +136,18 @@ class RoboAgendamento:
         sys.exit()
 
     def _analyse(self, posto, day, hours):
-        #print(self._now() + ": " + "Análise = Posto:" + str(posto) + " - Dia:\n" + str(day) + " as " + str(hours[0]))
+        for p in self.excluded_places:
+            if(p in posto):
+                return
+
         print(self._now()  + ": " + str(day) + " as " + str(hours[0]) + " no posto: " + str(posto))
         day_datetime    = datetime.strptime(day, '%d/%m/%Y')
-        if day_datetime <= self.max_date:
+
+        if day_datetime <= self.max_date and day_datetime >= self.min_date:
             self._agendar(day, hours.pop())
 
         self._get_select('horaSelecionada')
-        
+
         if not self.min_found_date:
             self.min_found_date = datetime.strptime(day, '%d/%m/%Y')
         else:
@@ -186,7 +166,7 @@ class RoboAgendamento:
 
     def run(self, cpf_value):
         driver = self._mount_chrome(self.visibility)
-        
+
         driver.get("https://www.riocard.com/rccgrt/passelivre/agenda/agendamento.asp")
 
         #iframe_switch = driver.find_element(By.CLASS_NAME, "iframe")
@@ -194,13 +174,13 @@ class RoboAgendamento:
 
         self._select_tipo(driver)
         self._put_cpf(driver, cpf_value)
-        
+
         print(self._now() + ": " + "Entrando no modo análise de horários")
         select = self._get_select('cboTipoAgenda')
-        select.select_by_value('6')
+        select.select_by_value(self.schedule_type)
 
         select = self._get_select('idPostoAtendimento')
-        
+
         for i in range(0, int(CHANGE_PROXY_INTERVAL/CHECK_INTERVAL)):
             print(self._now() + ": " + "Checando horarios.")
             for opt in select.options:
@@ -210,28 +190,20 @@ class RoboAgendamento:
                     select.select_by_value(v)
                     day   = self._get_day()
                     hours = self._get_hours()
-                    
+
                     self._analyse(opt.text, day, hours)
             sleep(CHECK_INTERVAL)
 
-        self._email("Ultimos 30 minutos", "Melhor dia encontrado: " + str(self.min_found_date.strftime("%d-%m-%Y %H:%M:%S")))
+        self._email("", "Ultimos 30 minutos\nMelhor dia encontrado: " + str(self.min_found_date.strftime("%d-%m-%Y %H:%M:%S")))
 
-if(len(sys.argv) < 5):
-    print("Usage: bot.py max_date visibility use_proxy use_virtual_display")
-    sys.exit()
-try:
-    visibility   = True if sys.argv[2] == 'true' else False
-    max_date     = sys.argv[1]
-    use_proxy    = True if sys.argv[3] == 'true' else False
-    use_vdisplay = True if sys.argv[4] == 'true' else False
-except:
-    print("Visibility must be a bool value")
-    sys.exit()
+config = json.loads(open("config.json", "r").read())
 
-with RoboAgendamento(visibility, max_date, use_proxy, use_vdisplay) as robo:
+print(config)
+
+with RoboAgendamento(config) as robo:
     while not robo.agendado:
         try:
-            robo.run("142.656.767-74")
+            robo.run(config['cpf'])
         except Exception as e:
             print("Excecao: " + str(e))
             with open("logs.txt", "a") as log:
